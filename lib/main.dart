@@ -61,10 +61,10 @@ class MyAppState extends State<HelloWorld> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Hello World",
+      title: "Clothes quiz",
       home: Scaffold(
         appBar: AppBar(
-          title: Text("Hello World"),
+          title: Text("Clothes quiz- Dushko Manev 196063"),
         ),
         body: Column(
           children: [
