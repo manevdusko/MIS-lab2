@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 void main() => runApp(new TodoApp());
 
@@ -10,7 +11,7 @@ class TodoApp extends StatelessWidget {
         theme: ThemeData(
           primarySwatch: Colors.green,
         ),
-        title: "Душко Манев лаб3 196063",
+        title: "Потсетник за испити",
         home: new TodoList());
   }
 }
@@ -21,15 +22,19 @@ class TodoList extends StatefulWidget {
 }
 
 class TodoListState extends State<TodoList> {
-  Map<String, String> _ispiti = new HashMap<String, String>();
+  TimeOfDay selectedTime = TimeOfDay.now();
+  DateTime selectedDate = DateTime.now();
+  Map<String, DateTime> _ispiti = new HashMap<String, DateTime>();
   String _newispit = "";
-  String _newDate = "";
 
   void _dodajIspit() {
     if (_newispit.length > 0) {
       setState(() {
-        print("ISPIT " + _newispit + "  DATE  " + _newDate);
-        _ispiti[_newispit] = _newDate;
+        DateTime ss = new DateTime(selectedDate.year, selectedDate.month,
+            selectedDate.day, selectedTime.hour, selectedTime.minute);
+
+        _ispiti[_newispit] = ss;
+        print(_ispiti[_newispit]);
       });
     }
   }
@@ -46,7 +51,7 @@ class TodoListState extends State<TodoList> {
         builder: (BuildContext context) {
           return new AlertDialog(
             title: new Text(
-                'Дали испитот по предметот "${_ispiti.keys.elementAt(index)}" кој треба да го полагате на "${_ispiti[_ispiti.keys.elementAt(index)]}" сакате да се избрише?'),
+                'Дали испитот по предметот "${_ispiti.keys.elementAt(index)}" кој треба да го полагате на "${DateFormat('dd-MM-yyyy - kk:mm').format(_ispiti[_ispiti.keys.elementAt(index)])}" сакате да се избрише?'),
             actions: <Widget>[
               new TextButton(
                 child: new Text('Не'),
@@ -64,6 +69,32 @@ class TodoListState extends State<TodoList> {
         });
   }
 
+  _selectTime(BuildContext context) async {
+    final TimeOfDay timeOfDay = await showTimePicker(
+      context: context,
+      initialTime: selectedTime,
+      initialEntryMode: TimePickerEntryMode.dial,
+    );
+    if (timeOfDay != null && timeOfDay != selectedTime) {
+      setState(() {
+        selectedTime = timeOfDay;
+      });
+    }
+  }
+
+  _selectDate(BuildContext context) async {
+    final DateTime selected = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2010),
+      lastDate: DateTime(2025),
+    );
+    if (selected != null && selected != selectedDate)
+      setState(() {
+        selectedDate = selected;
+      });
+  }
+
   void _setNewispitState(String ispit) {
     if (ispit.length > 0) {
       setState(() {
@@ -72,16 +103,10 @@ class TodoListState extends State<TodoList> {
     }
   }
 
-  void _setNewispitDateState(String date) {
-    if (date.length > 0) {
-      setState(() {
-        _newDate = date;
-      });
-    }
-  }
-
   Widget _buildListaNaIspiti() {
     return new ListView.builder(
+      physics: NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
       itemCount: _ispiti.length,
       itemBuilder: (context, index) {
         String key = _ispiti.keys.elementAt(index);
@@ -98,7 +123,7 @@ class TodoListState extends State<TodoList> {
                   ),
                 ),
                 new Text(
-                  "${_ispiti[key]}",
+                  "${DateFormat('dd-MM-yyyy - kk:mm').format(_ispiti[key])}",
                   style: TextStyle(color: Colors.grey, fontSize: 15),
                 ),
               ],
@@ -115,12 +140,24 @@ class TodoListState extends State<TodoList> {
   Widget build(BuildContext context) {
     return new Scaffold(
       appBar: new AppBar(
-        title: new Text('Душко Манев лаб3 196063'),
+        title: new Text('Потсетник за испити'),
         actions: [
           IconButton(onPressed: _pushDodajIspit, icon: Icon(Icons.add))
         ],
       ),
-      body: _buildListaNaIspiti(),
+      body: SingleChildScrollView(
+        physics: ScrollPhysics(),
+        child: Column(
+          children: [
+            _buildListaNaIspiti(),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: null,
+        tooltip: 'Increment',
+        child: Text("датум"),
+      ),
     );
   }
 
@@ -146,17 +183,17 @@ class TodoListState extends State<TodoList> {
                 hintText: 'Име на предметот',
                 contentPadding: EdgeInsets.all(16)),
           ),
-          new TextField(
-            autofocus: true,
-            onSubmitted: (val) {
-              _dodajIspit();
+          ElevatedButton(
+            onPressed: () {
+              _selectDate(context);
             },
-            onChanged: (val) {
-              _setNewispitDateState(val);
+            child: Text("Избери датум"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _selectTime(context);
             },
-            decoration: new InputDecoration(
-                hintText: 'Термин за полагање',
-                contentPadding: EdgeInsets.all(16)),
+            child: Text("Избери време"),
           ),
         ],
       );
