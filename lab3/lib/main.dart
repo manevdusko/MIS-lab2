@@ -154,7 +154,9 @@ class TodoListState extends State<TodoList> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: null,
+        onPressed: (){
+           _selectDate(context);
+        },
         tooltip: 'Increment',
         child: Text("датум"),
       ),
