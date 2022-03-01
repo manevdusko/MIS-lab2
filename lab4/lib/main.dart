@@ -1,6 +1,10 @@
 import 'dart:collection';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:flutter_native_timezone/flutter_native_timezone.dart';
 
 void main() => runApp(new TodoApp());
 
@@ -21,56 +25,110 @@ class TodoList extends StatefulWidget {
   State<StatefulWidget> createState() => new TodoListState();
 }
 
+class User {
+  String username;
+  String password;
+  Map<String, DateTime> _ispiti = new HashMap<String, DateTime>();
+  List<String> _dates = new List<String>();
+  User(this.username, this.password);
+}
+
 class TodoListState extends State<TodoList> {
   TimeOfDay selectedTime = TimeOfDay.now();
   DateTime selectedDate = DateTime.now();
   DateTime showFor = DateTime.now();
-  Map<String, DateTime> _ispiti = new HashMap<String, DateTime>();
   Map<String, DateTime> _showIspiti = new HashMap<String, DateTime>();
-  List<String> _dates = new List<String>();
   String _newispit = "";
+  String _newPassword = "";
+  String _newLogin = "";
+  String _loggedInUser = "";
   String sanitizeDateTime(DateTime dateTime) =>
       "${dateTime.year}-${dateTime.month}-${dateTime.day}";
-  void _dodajIspit() {
-    if (_newispit.length > 0) {
-      setState(() {
-        DateTime ss = new DateTime(selectedDate.year, selectedDate.month,
-            selectedDate.day, selectedTime.hour, selectedTime.minute);
-        _dates.add(sanitizeDateTime(ss));
-        _ispiti[_newispit] = ss;
-        print(_ispiti[_newispit]);
-      });
+
+  List<User> users = new List();
+
+  FlutterLocalNotificationsPlugin localNotification;
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    var androidInitialize = new AndroidInitializationSettings('ic_launcher');
+
+    // Future<String> timeZoneName = FlutterNativeTimezone.getLocalTimezone();
+    // print(timeZoneName.toString());
+
+    var iOSImtialize = new IOSInitializationSettings();
+    var initializationSettings = new InitializationSettings(
+        android: androidInitialize, iOS: iOSImtialize);
+    localNotification = new FlutterLocalNotificationsPlugin();
+    localNotification.initialize(initializationSettings);
+  }
+
+  Future<void> _showNotification(String title, String body) async {
+    tz.initializeTimeZones();
+    final String currentTimeZone =
+        await FlutterNativeTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(currentTimeZone));
+    var androidDetails = new AndroidNotificationDetails(
+        "channelId", "Local Notification", "This is the description",
+        importance: Importance.max);
+    var iosDetails = new IOSNotificationDetails();
+    var generalNotificationDetails =
+        new NotificationDetails(android: androidDetails, iOS: iosDetails);
+    await localNotification.show(0, title, body, generalNotificationDetails);
+
+    // await localNotification.zonedSchedule(
+    //     0,
+    //     title,
+    //     body,
+    //     tz.TZDateTime.now(tz.local).add(const Duration(seconds: 5)),
+    //     generalNotificationDetails,
+    //     androidAllowWhileIdle: true);
+  }
+
+  void _register() {
+    User u = new User(_newLogin, _newPassword);
+    users.add(u);
+    _showNotification(
+        "Успешна регистрација", "Успешно се регистрира корисник " + u.username);
+  }
+
+  void _login() {
+    for (User u in users) {
+      if (_newLogin == u.username) {
+        if (_newPassword == u.password) {
+          _showNotification(
+              "Успешна најава", "Успешно се најавивте " + _loggedInUser);
+          setState(() {
+            _loggedInUser = _newLogin;
+          });
+        }
+      }
     }
   }
 
-  void _izbrisiIspit(int index) {
-    setState(() {
-      _ispiti.remove(_ispiti.keys.elementAt(index));
-    });
-  }
-
-  void _promtZavrsiIspit(int index) {
-    showDialog(
-        context: context,
-        builder: (BuildContext context) {
-          return new AlertDialog(
-            title: new Text(
-                'Дали испитот по предметот "${_ispiti.keys.elementAt(index)}" кој треба да го полагате на "${DateFormat('dd-MM-yyyy - kk:mm').format(_ispiti[_ispiti.keys.elementAt(index)])}" сакате да се избрише?'),
-            actions: <Widget>[
-              new TextButton(
-                child: new Text('Не'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              new TextButton(
-                child: new Text('Избриши'),
-                onPressed: () {
-                  _izbrisiIspit(index);
-                  Navigator.of(context).pop();
-                },
-              )
-            ],
-          );
-        });
+  void _dodajIspit() {
+    if (_newispit.length > 0) {
+      setState(() {
+        if (_loggedInUser != "") {
+          for (User u in users) {
+            if (u.username == _loggedInUser) {
+              DateTime ss = new DateTime(selectedDate.year, selectedDate.month,
+                  selectedDate.day, selectedTime.hour, selectedTime.minute);
+              u._dates.add(sanitizeDateTime(ss));
+              u._ispiti[_newispit] = ss;
+              _showNotification(
+                  "Полагате испит",
+                  "Полагате испит по предметот " +
+                      _newispit +
+                      " на " +
+                      "${DateFormat('dd-MM-yyyy - kk:mm').format(ss)}");
+            }
+          }
+        }
+      });
+    }
   }
 
   _selectTime(BuildContext context) async {
@@ -87,7 +145,17 @@ class TodoListState extends State<TodoList> {
   }
 
   _filterByDate(BuildContext context) async {
-    DateTime sDate = _ispiti.values.last;
+    DateTime sDate = null;
+    User sU = null;
+    if (_loggedInUser != "") {
+      for (User u in users) {
+        if (u.username == _loggedInUser) {
+          sDate = u._ispiti.values.last;
+          sU = u;
+        }
+      }
+    }
+
     final DateTime selected = await showDatePicker(
       context: context,
       firstDate: DateTime(2010),
@@ -95,17 +163,17 @@ class TodoListState extends State<TodoList> {
       initialDate: sDate,
       selectableDayPredicate: (DateTime val) {
         String sanitized = sanitizeDateTime(val);
-        return _dates.contains(sanitized);
+        return sU._dates.contains(sanitized);
       },
     );
     if (selected != null)
       setState(() {
         _showIspiti.clear();
-        for (String ispit in _ispiti.keys) {
-          if (sanitizeDateTime(_ispiti[ispit])
+        for (String ispit in sU._ispiti.keys) {
+          if (sanitizeDateTime(sU._ispiti[ispit])
                   .compareTo(sanitizeDateTime(selected)) ==
               0) {
-            _showIspiti[ispit] = _ispiti[ispit];
+            _showIspiti[ispit] = sU._ispiti[ispit];
           }
         }
         showFor = selected;
@@ -125,12 +193,44 @@ class TodoListState extends State<TodoList> {
       });
   }
 
+  void _setNewLoginUState(String username) {
+    if (username.length > 0) {
+      setState(() {
+        _newLogin = username;
+      });
+    }
+  }
+
+  void _setNewLoginPState(String password) {
+    if (password.length > 0) {
+      setState(() {
+        _newPassword = password;
+      });
+    }
+  }
+
   void _setNewispitState(String ispit) {
     if (ispit.length > 0) {
       setState(() {
         _newispit = ispit;
       });
     }
+  }
+
+  Widget _buttons() {
+    return new Row(
+      children: [
+        _loggedInUser == ""
+            ? new IconButton(onPressed: _pushRegister, icon: Icon(Icons.login))
+            : new IconButton(onPressed: _logout, icon: Icon(Icons.logout)),
+        _loggedInUser == ""
+            ? new Container(
+                height: 0,
+                width: 0,
+              )
+            : new IconButton(onPressed: _pushDodajIspit, icon: Icon(Icons.add))
+      ],
+    );
   }
 
   Widget _buildListaNaIspiti() {
@@ -153,12 +253,12 @@ class TodoListState extends State<TodoList> {
                   ),
                 ),
                 new Text(
-                  "${DateFormat('dd-MM-yyyy - kk:mm').format(_ispiti[key])}",
+                  "${DateFormat('dd-MM-yyyy - kk:mm').format(_showIspiti[key])}",
                   style: TextStyle(color: Colors.grey, fontSize: 15),
                 ),
               ],
             ),
-            onTap: () => _promtZavrsiIspit(index),
+            onTap: () => null,
           ),
           margin: EdgeInsets.all(10),
         );
@@ -172,7 +272,7 @@ class TodoListState extends State<TodoList> {
       appBar: new AppBar(
         title: new Text('Потсетник за испити'),
         actions: [
-          IconButton(onPressed: _pushDodajIspit, icon: Icon(Icons.add))
+          _buttons(),
         ],
       ),
       body: SingleChildScrollView(
@@ -187,6 +287,21 @@ class TodoListState extends State<TodoList> {
     );
   }
 
+  void _pushRegister() {
+    Navigator.of(context).push(new MaterialPageRoute(builder: (context) {
+      return _buildRegister();
+    }));
+  }
+
+  void _logout() {
+    _loggedInUser = "";
+    setState(() {
+      _loggedInUser = "";
+      _showIspiti.clear();
+      print("Logged off " + _loggedInUser);
+    });
+  }
+
   void _pushDodajIspit() {
     Navigator.of(context).push(new MaterialPageRoute(builder: (context) {
       return _buildDodajIspit();
@@ -194,7 +309,13 @@ class TodoListState extends State<TodoList> {
   }
 
   Widget _datum() {
-    if (_ispiti.isEmpty) {
+    User sU = null;
+    for (User u in users) {
+      if (_loggedInUser == u.username) {
+        sU = u;
+      }
+    }
+    if (_loggedInUser == "" || sU._ispiti.isEmpty || _loggedInUser == "") {
       return Container();
     } else {
       return FloatingActionButton(
@@ -205,6 +326,72 @@ class TodoListState extends State<TodoList> {
         child: Text("датум"),
       );
     }
+  }
+
+  Widget _buildRegister() {
+    Widget _textElement() {
+      return Column(
+        children: [
+          new TextField(
+            autofocus: true,
+            onSubmitted: (val) {
+              _login();
+            },
+            onChanged: (val) {
+              _setNewLoginUState(val);
+            },
+            decoration: new InputDecoration(
+                hintText: 'Корисничко име', contentPadding: EdgeInsets.all(16)),
+          ),
+          new TextField(
+            obscureText: true,
+            enableSuggestions: false,
+            autocorrect: false,
+            autofocus: true,
+            onSubmitted: (val) {
+              _login();
+            },
+            onChanged: (val) {
+              _setNewLoginPState(val);
+            },
+            decoration: new InputDecoration(
+                hintText: 'Лозинка', contentPadding: EdgeInsets.all(16)),
+          ),
+        ],
+      );
+    }
+
+    return new Scaffold(
+        appBar: new AppBar(title: new Text('Автентикација')),
+        body: new Container(
+            padding: EdgeInsets.all(16),
+            child: new Column(
+              children: <Widget>[
+                _textElement(),
+                new SizedBox(
+                  height: 40,
+                ),
+                new Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: <Widget>[
+                    new ElevatedButton(
+                      onPressed: () {
+                        _login();
+                        Navigator.pop(context);
+                      },
+                      child: new Text("Најава"),
+                    ),
+                    new ElevatedButton(
+                      onPressed: () {
+                        _register();
+                        Navigator.pop(context);
+                      },
+                      child: new Text("Регистрација"),
+                    ),
+                  ],
+                )
+              ],
+            )));
   }
 
   Widget _buildDodajIspit() {
